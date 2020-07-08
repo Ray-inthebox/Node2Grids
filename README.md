@@ -1,4 +1,4 @@
-# Structure2Grid in Pytorch
+# Node2Grids in Pytorch
 ------
 We provide Pytorch implementations for the paper "TBD". You need to install Pytorch and other related python packages. the dependencies are listed below.
 ```
