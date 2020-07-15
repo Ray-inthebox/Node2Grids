@@ -18,3 +18,7 @@ If you have CUDA devices, try
 ```
 CUDA_VISIBLE_DEVICES='YOUR CUDA DEVICES' python main.py
 ```
+If you try to use large scale dataset, a parallel version of preprocessing is provided. Specify the param *num_woker* to make parallelable.
+```
+findTopK(adj, idx, k, nodesdegree, nums_worker=2 (or larger, which is default to 1))
+```
