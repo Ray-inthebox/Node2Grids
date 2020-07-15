@@ -61,90 +61,66 @@ def load_small_data(dataset_str):
     y_test[test_mask, :] = labels[test_mask, :]
     return adj, features, labels, y_train, y_val, y_test, train_mask, val_mask, test_mask
 
-#choose top first-order neighbor
-def topNeighbor1(keys, values, k, rowRank):
-    nodetodegree = dict(map(lambda x, y: [x, y], keys, values))
-    for i in range(len(nodetodegree)):
-        max_degree_key = max(nodetodegree, key=lambda j: nodetodegree[j])
-        nodetodegree.pop(max_degree_key)
-        if max_degree_key not in rowRank:
-            rowRank.append(max_degree_key)
-            if len(rowRank) == k:
-                return rowRank
-    return rowRank
-
-#top second-order neighbor
-def topNeighbor2(keys, values, k, rowRank, centralnode):
-    nodetodegree = dict(map(lambda x, y: [x, y], keys, values))
-    for i in range(len(nodetodegree)):
-        max_degree_key = max(nodetodegree, key=lambda j: nodetodegree[j])
-        nodetodegree.pop(max_degree_key)
-        if max_degree_key not in rowRank:
-            if max_degree_key != centralnode:
-                rowRank.append(max_degree_key)
-                if len(rowRank) == k:
-                    return rowRank
-    return rowRank
-
+def findTopK(adj:sp.lil_matrix, idx:list, k:int, nodesdegree:np.ndarray,nums_worker = 1):
+    jobs = []
+    res = [0]*nums_worker
+    queue = mp.Queue()
+    idxs = split_list_n_list(idx,nums_worker)
+    i=0
+    for idx in idxs:
+        p = Process(target = _findTopK,args = (adj,idx,k,nodesdegree,queue,i))
+        i+=1
+        jobs.append(p)
+    for p in jobs:
+        p.start()
+    for p in jobs:
+        num,val = queue.get()
+        res[num]=val
+    return np.concatenate(np.array(res),axis=0)
 
 # find topk (first-order or second-order) neighbor
-def findTopK(G, start, end, k, nodesdegree):
-    centralnode = start
-    allNeighbor = []
-    while (centralnode < end):
-        neighbor1 = list(G.neighbors(centralnode))
-        chooseneighbor1 = []
-        for node in neighbor1:
-            degree = nodesdegree[node]
-            chooseval = degree
-            chooseneighbor1.append(chooseval)
-        if (len(neighbor1) >= k):
-            NeighborSorted = topNeighbor1(neighbor1, chooseneighbor1, k, [])
-            allNeighbor.append(NeighborSorted)
-            centralnode = centralnode + 1
-            continue
+def _findTopK(adj:sp.lil_matrix, idx:list, k:int, nodesdegree:np.ndarray,queue:mp.Queue(),series:int):
+    allNeigbor = []
+    for node in idx:
+        sortedNeighbor = []
+        r1_node = sp.find(adj[node])[1]
+        r1_degrees = nodesdegree[r1_node]
+        sortidx = r1_degrees.argsort()[::-1]
+        r1_node = r1_node[sortidx]
+        if len(r1_node)<k:
+            # find r2 node
+            r2_node = set()
+            for candidate in r1_node:
+                r2_node.update(sp.find(adj[candidate])[1])
+            # difference between r2 and r1
+            if r2_node:
+                r2_node = r2_node-set(list(r1_node))
+                if node in r2_node:
+                    r2_node.remove(node)
+            if r2_node:
+                r2_node = np.array(list(r2_node))
+                r2_degrees = nodesdegree[r2_node]
+                sortidx = r2_degrees.argsort()[::-1]
+                r2_node = r2_node[sortidx]
+                if len(r2_node)<k-len(r1_node):
+                    temp = np.full((1,k),node)[0]
+                    r2_node = np.hstack((r2_node,temp)) 
+            else:
+                r2_node = np.full((1,k),node)[0]
+            sortedNeighbor = np.hstack((r1_node,r2_node))[:k]
         else:
-            NeighborSorted = topNeighbor2(neighbor1, chooseneighbor1, k, [], centralnode)
-            neighbor2 = []
-            rowsumneighbor2 = []
-            for node in neighbor1:
-                neighbor = list(G.neighbors(node))
-                neighbor2.append(neighbor)
-            neighbor2 = itertools.chain.from_iterable(neighbor2)
-            neighbor2 = list(neighbor2)
-            neighbor2 = list(set(neighbor2))
-            for item in neighbor2:
-                degree = nodesdegree[item]
-                chooseval = degree
-                rowsumneighbor2.append(chooseval)
-            NeighborSorted = topNeighbor2(neighbor2, rowsumneighbor2, k, NeighborSorted, centralnode)
-            l = list(set(NeighborSorted))
-            l.sort(key=NeighborSorted.index)
-            if centralnode in l:
-                l.remove(centralnode)
-            while len(l) < k:
-                l.append(-1)
-            l = l[:k]
-            allNeighbor.append(l)
-            centralnode = centralnode + 1
-    return allNeighbor
+            sortedNeighbor = r1_node[:k]
+        allNeigbor.append(sortedNeighbor)
+    
+    queue.put((series,allNeigbor))
 
 # create grid-like map
-@nb.njit(nopython=True, cache=True, nogil=True, fastmath=True)
-def createMap(Topk, feas, biasfactor, startnode, mapsize_a, mapsize_b):
-    Map = np.zeros(shape=(len(Topk), mapsize_a, mapsize_b, feas.shape[1]))
-    j = 0
-    for i in range(len(Topk)):
-        pos = 0
-        centralnode = j + startnode
+@nb.njit(cache=True, nogil=True, fastmath=True)
+def _createMap(Topk, feas,  idx, biasfactor, mapsize_a, mapsize_b):
+    Map = np.zeros(shape=(len(Topk), mapsize_a, mapsize_b, feas.shape[1]),dtype=np.float32)
+    for i,centralNode in enumerate(idx):
         temp_map = np.zeros(shape=(1, mapsize_a * mapsize_b, feas.shape[1]))
-        for item in Topk[i]:
-            if (item != -1 and pos < mapsize_a * mapsize_b):
-                for h in range(feas.shape[1]):
-                    temp_map[0][pos][h] = (1 - biasfactor) * feas[item, h] + biasfactor * feas[centralnode, h]
-                pos += 1
-        map = np.reshape(temp_map, (mapsize_a, mapsize_b, feas.shape[1]))
-        Map[j] = map
-        j += 1
+        temp_map[0] = (1 - biasfactor) * feas[Topk[i],:]+biasfactor * feas[centralNode]
+        Map[i] = np.reshape(temp_map, (mapsize_a, mapsize_b, feas.shape[1]))
     return Map
 

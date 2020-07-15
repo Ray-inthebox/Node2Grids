@@ -19,18 +19,17 @@ class GraphNet(object):
 
     def process_data(self):
         self.data = load_small_data(self.conf.dataset)
-        self.adj = self.data[0]
+        self.adj = self.data[0].tocsr()
         self.feas = self.data[1]
         self.labels = self.data[2]
         self.rowsum = np.array(self.adj.sum(1))
         self.rowsum = self.rowsum.reshape(self.conf.nodenum)
         self.rowsum = self.rowsum.tolist()
 
-        G = nx.from_scipy_sparse_matrix(self.adj)
 
-        self.train_topks = findTopK(G, self.conf.trainstart, self.conf.trainend, self.conf.k, self.rowsum)
-        self.val_topks = findTopK(G, self.conf.valstart, self.conf.valend, self.conf.k, self.rowsum)
-        self.test_topks = findTopK(G, self.conf.teststart, self.conf.testend, self.conf.k, self.rowsum)
+        self.train_topks = findTopK(self.adj, list(range(self.conf.trainstart, self.conf.trainend+1)), self.conf.k, self.rowsum)
+        self.val_topks = findTopK(self.adj, list(range(self.conf.valstart, self.conf.valend+1)), self.conf.k, self.rowsum)
+        self.test_topks = findTopK(self.adj, list(range(self.conf.teststart, self.conf.testend+1)), self.conf.k, self.rowsum)
 
         self.train_map = createMap(np.array(self.train_topks), self.feas.A, self.conf.biasfactor,
                                     self.conf.trainstart, self.conf.mapsize_a, self.conf.mapsize_b)
