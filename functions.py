@@ -7,6 +7,7 @@ import scipy.sparse as sp
 import itertools
 import numba as nb
 import numpy as np
+import multiprocessing as mp
 
 
 def parse_index_file(filename):
@@ -21,6 +22,16 @@ def sample_mask(idx, l):
     mask = np.zeros(l)
     mask[idx] = 1
     return np.array(mask, dtype=np.bool)
+
+
+def split_list_n_list(origin_list, n):
+    if len(origin_list) % n == 0:
+        cnt = len(origin_list) // n
+    else:
+        cnt = len(origin_list) // n + 1
+
+    for i in range(0, n):
+        yield origin_list[i * cnt:(i + 1) * cnt]
 
 def load_small_data(dataset_str):
     """Load data."""
@@ -68,7 +79,7 @@ def findTopK(adj:sp.lil_matrix, idx:list, k:int, nodesdegree:np.ndarray,nums_wor
     idxs = split_list_n_list(idx,nums_worker)
     i=0
     for idx in idxs:
-        p = Process(target = _findTopK,args = (adj,idx,k,nodesdegree,queue,i))
+        p = mp.Process(target = _findTopK,args = (adj,idx,k,nodesdegree,queue,i))
         i+=1
         jobs.append(p)
     for p in jobs:
@@ -84,7 +95,8 @@ def _findTopK(adj:sp.lil_matrix, idx:list, k:int, nodesdegree:np.ndarray,queue:m
     for node in idx:
         sortedNeighbor = []
         r1_node = sp.find(adj[node])[1]
-        r1_degrees = nodesdegree[r1_node]
+
+        r1_degrees = np.array([nodesdegree[node] for node in r1_node])
         sortidx = r1_degrees.argsort()[::-1]
         r1_node = r1_node[sortidx]
         if len(r1_node)<k:
@@ -99,7 +111,7 @@ def _findTopK(adj:sp.lil_matrix, idx:list, k:int, nodesdegree:np.ndarray,queue:m
                     r2_node.remove(node)
             if r2_node:
                 r2_node = np.array(list(r2_node))
-                r2_degrees = nodesdegree[r2_node]
+                r2_degrees = np.array([nodesdegree[node] for node in r2_node])
                 sortidx = r2_degrees.argsort()[::-1]
                 r2_node = r2_node[sortidx]
                 if len(r2_node)<k-len(r1_node):
@@ -115,12 +127,21 @@ def _findTopK(adj:sp.lil_matrix, idx:list, k:int, nodesdegree:np.ndarray,queue:m
     queue.put((series,allNeigbor))
 
 # create grid-like map
-@nb.njit(cache=True, nogil=True, fastmath=True)
-def _createMap(Topk, feas,  idx, biasfactor, mapsize_a, mapsize_b):
-    Map = np.zeros(shape=(len(Topk), mapsize_a, mapsize_b, feas.shape[1]),dtype=np.float32)
-    for i,centralNode in enumerate(idx):
+@nb.njit(nopython=True, cache=True, nogil=True, fastmath=True)
+def createMap(Topk, feas, biasfactor, startnode, mapsize_a, mapsize_b):
+    Map = np.zeros(shape=(len(Topk), mapsize_a, mapsize_b, feas.shape[1]))
+    j = 0
+    for i in range(len(Topk)):
+        pos = 0
+        centralnode = j + startnode
         temp_map = np.zeros(shape=(1, mapsize_a * mapsize_b, feas.shape[1]))
-        temp_map[0] = (1 - biasfactor) * feas[Topk[i],:]+biasfactor * feas[centralNode]
-        Map[i] = np.reshape(temp_map, (mapsize_a, mapsize_b, feas.shape[1]))
+        for item in Topk[i]:
+            if (item != -1 and pos < mapsize_a * mapsize_b):
+                for h in range(feas.shape[1]):
+                    temp_map[0][pos][h] = (1 - biasfactor) * feas[item, h] + biasfactor * feas[centralnode, h]
+                pos += 1
+        map = np.reshape(temp_map, (mapsize_a, mapsize_b, feas.shape[1]))
+        Map[j] = map
+        j += 1
     return Map
 

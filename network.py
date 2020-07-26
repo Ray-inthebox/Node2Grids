@@ -27,9 +27,9 @@ class GraphNet(object):
         self.rowsum = self.rowsum.tolist()
 
 
-        self.train_topks = findTopK(self.adj, list(range(self.conf.trainstart, self.conf.trainend+1)), self.conf.k, self.rowsum)
-        self.val_topks = findTopK(self.adj, list(range(self.conf.valstart, self.conf.valend+1)), self.conf.k, self.rowsum)
-        self.test_topks = findTopK(self.adj, list(range(self.conf.teststart, self.conf.testend+1)), self.conf.k, self.rowsum)
+        self.train_topks = findTopK(self.adj, list(range(self.conf.trainstart, self.conf.trainend)), self.conf.k, self.rowsum)
+        self.val_topks = findTopK(self.adj, list(range(self.conf.valstart, self.conf.valend)), self.conf.k, self.rowsum)
+        self.test_topks = findTopK(self.adj, list(range(self.conf.teststart, self.conf.testend)), self.conf.k, self.rowsum)
 
         self.train_map = createMap(np.array(self.train_topks), self.feas.A, self.conf.biasfactor,
                                     self.conf.trainstart, self.conf.mapsize_a, self.conf.mapsize_b)
@@ -115,13 +115,15 @@ class GraphNet(object):
         i = 0
         while i < len(self.xs_train):
             start = i
-            end = i + self.conf.batch_size
+            end = min(i + self.conf.batch_size, self.conf.trainend)
             batch_x = self.xs_train[start:end]
             batch_y = self.ys_train[start:end]
             self.optimizer.zero_grad()
+
             output, attention = self.model(batch_x, self.feas, start)
             attention = attention.view(-1)
             attentionloss = self.conf.attentionreg * torch.sum(attention ** 2)
+            #print(output,batch_y)
             loss = self.loss(output, batch_y) + torch.tensor(attentionloss)
             loss.backward(loss)
             self.optimizer.step()
@@ -142,7 +144,7 @@ class GraphNet(object):
             print('Test accuracy -----> ', test_accuracy)
 
 
-            if epoch_num > 400 and val_acc >= stats[0]:
+            if val_acc >= stats[0]:
                 stats[0], stats[1], stats[2] = val_acc, 0, max(test_accuracy, stats[2])
             else:
                 stats[1] += 1
