@@ -70,7 +70,7 @@ def load_small_data(dataset_str):
     y_train[train_mask, :] = labels[train_mask, :]
     y_val[val_mask, :] = labels[val_mask, :]
     y_test[test_mask, :] = labels[test_mask, :]
-    return adj, features, labels, y_train, y_val, y_test, train_mask, val_mask, test_mask
+    return adj, features, labels
 
 def findTopK(adj:sp.lil_matrix, idx:list, k:int, nodesdegree:np.ndarray,nums_worker = 1):
     jobs = []
