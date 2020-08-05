@@ -115,10 +115,10 @@ def _findTopK(adj:sp.lil_matrix, idx:list, k:int, nodesdegree:np.ndarray,queue:m
                 sortidx = r2_degrees.argsort()[::-1]
                 r2_node = r2_node[sortidx]
                 if len(r2_node)<k-len(r1_node):
-                    temp = np.full((1,k),node)[0]
+                    temp = np.full((1,k),-1)[0]
                     r2_node = np.hstack((r2_node,temp)) 
             else:
-                r2_node = np.full((1,k),node)[0]
+                r2_node = np.full((1,k),-1)[0]
             sortedNeighbor = np.hstack((r1_node,r2_node))[:k]
         else:
             sortedNeighbor = r1_node[:k]
