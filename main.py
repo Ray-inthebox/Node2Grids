@@ -9,7 +9,7 @@ def configure():
 
     #mapping
     args.add_argument('--k', type=int, default=12)
-    args.add_argument('--mapsize_a', type=int, default=11)
+    args.add_argument('--mapsize_a', type=int, default=12)
     args.add_argument('--mapsize_b', type=int, default=1)
     args.add_argument('--biasfactor', type=float, default=0.4)
 
@@ -29,7 +29,7 @@ def configure():
     #network
     args.add_argument('--max_step', type=int, default=1000)
     args.add_argument('--learning_rate_base', type=float, default=0.008)
-    args.add_argument('--batch_size', type=int, default=3)
+    args.add_argument('--batch_size', type=int, default=8)
     args.add_argument('--dropout', type=float, default=0.6)
     args.add_argument('--weight_decay', type=float, default=0.00015)
     args.add_argument('--attentionreg', type=float, default=0.07)
