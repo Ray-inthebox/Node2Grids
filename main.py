@@ -8,7 +8,7 @@ def configure():
     args = argparse.ArgumentParser()
 
     #mapping
-    args.add_argument('--k', type=int, default=11)
+    args.add_argument('--k', type=int, default=12)
     args.add_argument('--mapsize_a', type=int, default=11)
     args.add_argument('--mapsize_b', type=int, default=1)
     args.add_argument('--biasfactor', type=float, default=0.4)
