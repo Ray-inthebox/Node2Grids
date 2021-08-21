@@ -8,7 +8,7 @@ We provide Pytorch implementations for the paper "[An Uncoupled Training Archite
 - sklearn
 ```
 # Data Preparation
-We provide the datasets including cora, citeseer, pubmed. For the Amazon2M, we will upload it to github later, or you can download it from [here](https://drive.google.com/drive/folders/1qWL76l7wYcESLfYNg0KbNjk22DEP_CTQ?usp=sharing "here").
+We provide the datasets including cora, citeseer, pubmed. We use the ogbn-products dataset for large-scale dataset testing, you can download it [here](https://ogb.stanford.edu/docs/nodeprop/ "here").
 # Run the Code
 For all dataset, try
 ```
